@@ -42,6 +42,96 @@ def setup_couchdb():
     
     return True
 
+def get_vendors_from_odoo():
+    """Get all vendors from Odoo that have blockchain TX IDs"""
+    common = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/common')
+    models = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/object')
+    
+    uid = common.authenticate(ODOO_DB, ODOO_USER, ODOO_PASSWORD, {})
+    
+    if not uid:
+        print("❌ Failed to authenticate with Odoo")
+        return []
+    
+    # Search for vendors with blockchain TX IDs
+    vendor_ids = models.execute_kw(
+        ODOO_DB, uid, ODOO_PASSWORD,
+        'vendor.contract.vendor', 'search',
+        [[('blockchain_tx_id', '!=', False)]]
+    )
+    
+    if not vendor_ids:
+        print("No vendors with blockchain TX IDs found")
+        return []
+    
+    # Read vendor details
+    vendors = models.execute_kw(
+        ODOO_DB, uid, ODOO_PASSWORD,
+        'vendor.contract.vendor', 'read',
+        [vendor_ids],
+        {'fields': ['vendor_id', 'name', 'vendor_type', 'status', 'contact_email', 
+                   'registration_number', 'blockchain_identity', 'blockchain_tx_id']}
+    )
+    
+    return vendors
+
+def populate_vendor_blockchain_data(vendors):
+    """Populate CouchDB with vendor data to simulate blockchain"""
+    auth = (COUCH_USER, COUCH_PASSWORD)
+    db_name = "vendorchannel_vendors"
+    
+    # Create vendors database if it doesn't exist
+    response = requests.get(f"{COUCH_URL}/{db_name}", auth=auth)
+    if response.status_code == 404:
+        print(f"Creating database: {db_name}")
+        requests.put(f"{COUCH_URL}/{db_name}", auth=auth)
+    
+    for vendor in vendors:
+        # Prepare blockchain document for vendor
+        blockchain_doc = {
+            "_id": vendor['blockchain_tx_id'],  # Use TX ID as document ID
+            "docType": "vendor",
+            "vendor_id": vendor['vendor_id'],
+            "name": vendor['name'],
+            "vendor_type": vendor['vendor_type'],
+            "status": vendor['status'],
+            "contact_email": vendor['contact_email'],
+            "registration_number": vendor['registration_number'] or '',
+            "blockchain_identity": vendor['blockchain_identity'],
+            "blockchain_tx_id": vendor['blockchain_tx_id'],
+            "timestamp": datetime.now().isoformat(),
+            "chaincode_version": "1.0",
+            "channel": "vendorchannel",
+            "verified": True
+        }
+        
+        # Check if document already exists
+        check_response = requests.get(
+            f"{COUCH_URL}/{db_name}/{vendor['blockchain_tx_id']}", 
+            auth=auth
+        )
+        
+        if check_response.status_code == 200:
+            # Update existing document
+            existing_doc = check_response.json()
+            blockchain_doc['_rev'] = existing_doc['_rev']
+            print(f"Updating existing blockchain record for vendor {vendor['vendor_id']}")
+        else:
+            print(f"Creating new blockchain record for vendor {vendor['vendor_id']}")
+        
+        # Save to CouchDB
+        response = requests.put(
+            f"{COUCH_URL}/{db_name}/{vendor['blockchain_tx_id']}",
+            auth=auth,
+            json=blockchain_doc,
+            headers={"Content-Type": "application/json"}
+        )
+        
+        if response.status_code in [201, 202]:
+            print(f"✅ Successfully saved vendor {vendor['vendor_id']} to blockchain")
+        else:
+            print(f"❌ Failed to save vendor {vendor['vendor_id']}: {response.text}")
+
 def get_contracts_from_odoo():
     """Get all contracts from Odoo that have blockchain TX IDs"""
     common = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/common')
@@ -160,6 +250,43 @@ def verify_populated_data():
     
     return response.status_code == 200
 
+def test_vendor_verification(vendor_id):
+    """Test that Odoo can verify vendor against blockchain"""
+    common = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/common')
+    models = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/object')
+    
+    uid = common.authenticate(ODOO_DB, ODOO_USER, ODOO_PASSWORD, {})
+    
+    if not uid:
+        return
+    
+    # Find vendor by vendor_id
+    vendor_ids = models.execute_kw(
+        ODOO_DB, uid, ODOO_PASSWORD,
+        'vendor.contract.vendor', 'search',
+        [[('vendor_id', '=', vendor_id)]]
+    )
+    
+    if vendor_ids:
+        # Call verification
+        result = models.execute_kw(
+            ODOO_DB, uid, ODOO_PASSWORD,
+            'vendor.contract.vendor', 'action_verify_blockchain',
+            [vendor_ids]
+        )
+        
+        # Read verification status
+        vendor = models.execute_kw(
+            ODOO_DB, uid, ODOO_PASSWORD,
+            'vendor.contract.vendor', 'read',
+            [vendor_ids[0]],
+            {'fields': ['verification_status', 'blockchain_verified']}
+        )[0]
+        
+        print(f"\n🔍 Verification Test for vendor {vendor_id}:")
+        print(f"   Status: {vendor['verification_status']}")
+        print(f"   Verified: {'✅' if vendor['blockchain_verified'] else '❌'}")
+
 def test_verification(contract_id):
     """Test that Odoo can now verify against blockchain"""
     common = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/common')
@@ -207,8 +334,19 @@ def main():
     if not setup_couchdb():
         return
     
-    # Step 2: Get contracts from Odoo
-    print("\n2️⃣ Getting contracts from Odoo...")
+    # Step 2: Get and populate vendors
+    print("\n2️⃣ Getting vendors from Odoo...")
+    vendors = get_vendors_from_odoo()
+    
+    if vendors:
+        print(f"✅ Found {len(vendors)} vendors with blockchain TX IDs")
+        print(f"\n3️⃣ Populating vendor blockchain data in CouchDB...")
+        populate_vendor_blockchain_data(vendors)
+    else:
+        print("No vendors with blockchain TX IDs found")
+    
+    # Step 3: Get and populate contracts
+    print("\n4️⃣ Getting contracts from Odoo...")
     contracts = get_contracts_from_odoo()
     
     if not contracts:
@@ -217,19 +355,24 @@ def main():
     
     print(f"✅ Found {len(contracts)} contracts with blockchain TX IDs")
     
-    # Step 3: Populate blockchain data
-    print(f"\n3️⃣ Populating blockchain data in CouchDB...")
+    # Step 4: Populate blockchain data
+    print(f"\n5️⃣ Populating contract blockchain data in CouchDB...")
     populate_blockchain_data(contracts)
     
-    # Step 4: Verify data was saved
-    print(f"\n4️⃣ Verifying blockchain data...")
+    # Step 5: Verify data was saved
+    print(f"\n6️⃣ Verifying blockchain data...")
     if verify_populated_data():
         print("✅ Blockchain data successfully populated!")
     
-    # Step 5: Test verification
+    # Step 6: Test verification for contracts
     if contracts:
-        print(f"\n5️⃣ Testing verification...")
+        print(f"\n7️⃣ Testing contract verification...")
         test_verification(contracts[0]['contract_id'])
+    
+    # Step 7: Test verification for vendors
+    if vendors:
+        print(f"\n8️⃣ Testing vendor verification...")
+        test_vendor_verification(vendors[0]['vendor_id'])
     
     print("\n" + "="*60)
     print("✅ Setup complete! Now you can:")

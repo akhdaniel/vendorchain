@@ -86,6 +86,31 @@ class VendorContractVendor(models.Model):
         readonly=True
     )
     
+    # Blockchain Verification Fields
+    blockchain_verified = fields.Boolean(
+        string='Blockchain Verified',
+        compute='_compute_blockchain_verification',
+        store=False,
+        help='Indicates if the vendor data matches blockchain'
+    )
+    blockchain_hash = fields.Char(
+        string='Data Hash',
+        compute='_compute_data_hash',
+        store=True,
+        help='Hash of current vendor data for comparison with blockchain'
+    )
+    last_verification_date = fields.Datetime(
+        string='Last Verified',
+        readonly=True,
+        help='Last time this vendor was verified against blockchain'
+    )
+    verification_status = fields.Selection([
+        ('verified', 'Verified'),
+        ('mismatch', 'Data Mismatch'),
+        ('not_on_chain', 'Not on Blockchain'),
+        ('pending', 'Verification Pending')
+    ], string='Verification Status', compute='_compute_blockchain_verification', store=False)
+    
     # Relationships
     contract_ids = fields.One2many(
         'vendor.contract',
@@ -273,3 +298,156 @@ class VendorContractVendor(models.Model):
             if vendor.contact_email:
                 if not re.match(r"[^@]+@[^@]+\.[^@]+", vendor.contact_email):
                     raise ValidationError(_("Invalid email format for vendor %s") % vendor.name)
+    
+    @api.depends('vendor_id', 'name', 'vendor_type', 'status', 'contact_email', 'registration_number')
+    def _compute_data_hash(self):
+        """Compute hash of vendor data for integrity checking"""
+        import hashlib
+        import json
+        
+        for vendor in self:
+            # Create deterministic data structure
+            data_to_hash = {
+                'vendor_id': vendor.vendor_id or '',
+                'name': vendor.name or '',
+                'vendor_type': vendor.vendor_type or '',
+                'status': vendor.status or '',
+                'contact_email': vendor.contact_email or '',
+                'registration_number': vendor.registration_number or '',
+                'blockchain_identity': vendor.blockchain_identity or ''
+            }
+            
+            # Sort keys for deterministic hashing
+            data_json = json.dumps(data_to_hash, sort_keys=True)
+            vendor.blockchain_hash = hashlib.sha256(data_json.encode()).hexdigest()
+    
+    def _compute_blockchain_verification(self):
+        """Verify vendor data against blockchain"""
+        for vendor in self:
+            if not vendor.blockchain_tx_id:
+                vendor.blockchain_verified = False
+                vendor.verification_status = 'not_on_chain'
+            else:
+                # Perform verification
+                verification_result = vendor._verify_blockchain_data()
+                vendor.blockchain_verified = verification_result.get('verified', False)
+                vendor.verification_status = verification_result.get('status', 'pending')
+    
+    def _verify_blockchain_data(self):
+        """Verify this vendor's data against blockchain"""
+        self.ensure_one()
+        
+        if not self.blockchain_tx_id:
+            return {'verified': False, 'status': 'not_on_chain'}
+        
+        try:
+            import requests
+            import json
+            import os
+            
+            # Check CouchDB for blockchain data
+            # Use container name when running in Docker, localhost for external access
+            if os.path.exists('/.dockerenv'):
+                # Running inside Docker container
+                couch_url = "http://admin:adminpw@couchdb:5984"
+            else:
+                # Running outside Docker
+                couch_url = "http://admin:adminpw@localhost:5984"
+            
+            # Search for vendor in blockchain databases
+            dbs_response = requests.get(f"{couch_url}/_all_dbs")
+            if dbs_response.status_code == 200:
+                # Look for vendorchannel databases or any with 'vendor' in the name
+                databases = [db for db in dbs_response.json() if 'vendorchannel' in db or 'vendor' in db]
+                
+                for db in databases:
+                    query = {
+                        "selector": {
+                            "$or": [
+                                {"vendor_id": self.vendor_id},
+                                {"blockchain_tx_id": self.blockchain_tx_id},
+                                {"blockchain_identity": self.blockchain_identity}
+                            ]
+                        }
+                    }
+                    
+                    find_response = requests.post(
+                        f"{couch_url}/{db}/_find",
+                        json=query,
+                        headers={"Content-Type": "application/json"}
+                    )
+                    
+                    if find_response.status_code == 200:
+                        docs = find_response.json().get('docs', [])
+                        if docs:
+                            blockchain_data = docs[0]
+                            
+                            # Compare critical fields
+                            vendor_match = blockchain_data.get('vendor_id') == self.vendor_id
+                            name_match = blockchain_data.get('name') == self.name
+                            status_match = blockchain_data.get('status') == self.status
+                            email_match = blockchain_data.get('contact_email') == self.contact_email
+                            
+                            _logger.info(f"Verification for vendor {self.vendor_id}:")
+                            _logger.info(f"  Vendor ID: {blockchain_data.get('vendor_id')} == {self.vendor_id} ? {vendor_match}")
+                            _logger.info(f"  Name: {blockchain_data.get('name')} == {self.name} ? {name_match}")
+                            _logger.info(f"  Status: {blockchain_data.get('status')} == {self.status} ? {status_match}")
+                            _logger.info(f"  Email: {blockchain_data.get('contact_email')} == {self.contact_email} ? {email_match}")
+                            
+                            if vendor_match and name_match and status_match and email_match:
+                                return {'verified': True, 'status': 'verified'}
+                            else:
+                                _logger.warning(f"Data mismatch for vendor {self.vendor_id}")
+                                return {'verified': False, 'status': 'mismatch'}
+            
+            # Check via API as fallback
+            api_response = requests.get(f"http://localhost:8000/api/v1/vendors/{self.vendor_id}")
+            if api_response.status_code == 200:
+                api_data = api_response.json().get('data', {})
+                if api_data.get('blockchain_tx_id') == self.blockchain_tx_id:
+                    return {'verified': True, 'status': 'verified'}
+            
+            return {'verified': False, 'status': 'pending'}
+            
+        except Exception as e:
+            _logger.error(f"Blockchain verification error for vendor {self.vendor_id}: {str(e)}")
+            return {'verified': False, 'status': 'pending'}
+    
+    def action_verify_blockchain(self):
+        """Manual blockchain verification action"""
+        self.ensure_one()
+        
+        result = self._verify_blockchain_data()
+        self.last_verification_date = fields.Datetime.now()
+        
+        if result['status'] == 'verified':
+            message = _("✅ Vendor data verified against blockchain")
+            message_type = 'success'
+        elif result['status'] == 'mismatch':
+            message = _("⚠️ WARNING: Vendor data does not match blockchain! Data may have been tampered.")
+            message_type = 'warning'
+            # Log security event
+            _logger.warning(f"SECURITY: Data mismatch detected for vendor {self.vendor_id}")
+            # Create activity for follow-up
+            self.activity_schedule(
+                'mail.mail_activity_data_warning',
+                summary=f"Blockchain data mismatch for {self.vendor_id}",
+                note="Vendor data in Odoo does not match blockchain. Please investigate."
+            )
+        elif result['status'] == 'not_on_chain':
+            message = _("❌ Vendor not found on blockchain")
+            message_type = 'warning'
+        else:
+            message = _("⏳ Blockchain verification pending")
+            message_type = 'info'
+        
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Blockchain Verification'),
+                'message': message,
+                'type': message_type,
+                'sticky': result['status'] == 'mismatch',
+            }
+        }

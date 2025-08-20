@@ -15,6 +15,7 @@
                 <field name="contract_count"/>
                 <field name="total_contract_value" widget="monetary"/>
                 <field name="blockchain_synced" widget="boolean_toggle" readonly="1"/>
+                <field name="verification_status" widget="badge" decoration-success="verification_status == 'verified'" decoration-warning="verification_status == 'mismatch'" decoration-danger="verification_status == 'not_on_chain'"/>
             </list>
         </field>
     </record>
@@ -30,6 +31,9 @@
                     <button name="action_suspend" type="object" string="Suspend" class="btn-warning" invisible="status in ['suspended', 'blacklisted']"/>
                     <button name="action_blacklist" type="object" string="Blacklist" class="btn-danger" invisible="status == 'blacklisted'" confirm="Are you sure you want to blacklist this vendor?"/>
                     <button name="action_sync_blockchain" type="object" string="Sync to Blockchain" class="btn-primary" icon="fa-chain"/>
+                    <button name="action_verify_blockchain" type="object" string="Verify Blockchain" 
+                            icon="fa-shield" class="btn-warning"
+                            invisible="not blockchain_tx_id"/>
                     <field name="status" widget="statusbar" statusbar_visible="active,suspended"/>
                 </header>
                 <sheet>
@@ -71,6 +75,10 @@
                             <field name="blockchain_identity" readonly="1" help="Unique vendor address on the blockchain (like a wallet address)"/>
                             <field name="blockchain_tx_id" readonly="1" help="Transaction ID from vendor registration"/>
                             <field name="blockchain_synced" readonly="1"/>
+                            <field name="blockchain_verified" readonly="1" widget="boolean_toggle"/>
+                            <field name="verification_status" widget="badge" readonly="1"/>
+                            <field name="last_verification_date" readonly="1" invisible="not last_verification_date"/>
+                            <field name="blockchain_hash" readonly="1" invisible="not blockchain_hash"/>
                         </group>
                         <group name="statistics" string="Statistics">
                             <field name="total_contract_value" widget="monetary"/>
