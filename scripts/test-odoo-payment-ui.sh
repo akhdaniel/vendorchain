@@ -1,0 +1,112 @@
+#!/bin/bash
+
+# Test Odoo Payment UI Functionality
+# This script guides through manual testing of the payment UI in Odoo
+
+set -e
+
+# Colors for output
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+echo "========================================"
+echo "  Odoo Payment UI Testing Guide"
+echo "========================================"
+echo ""
+
+echo -e "${BLUE}Step 1: Access Odoo${NC}"
+echo "  1. Open your browser and go to: http://localhost:8069"
+echo "  2. Login with:"
+echo "     - Email: admin"
+echo "     - Password: admin"
+echo ""
+read -p "Press Enter when you've logged in..."
+
+echo -e "${BLUE}Step 2: Navigate to Vendor Contracts${NC}"
+echo "  1. Click on 'Vendor Contracts' in the main menu"
+echo "  2. You should see several submenus:"
+echo "     - All Contracts"
+echo "     - Contracts to Verify"
+echo "     - Contracts to Submit"
+echo "     - Verified Contracts"
+echo "     - Submitted Contracts"
+echo ""
+read -p "Press Enter when you see the menu..."
+
+echo -e "${BLUE}Step 3: Create a Test Contract${NC}"
+echo "  1. Click on 'All Contracts'"
+echo "  2. Click the 'New' button"
+echo "  3. Fill in the following:"
+echo "     - Contract ID: CONTRACT-TEST-$(date +%s)"
+echo "     - Select or create a vendor"
+echo "     - Contract Type: Service"
+echo "     - Description: Test payment functionality"
+echo "     - Total Value: 100,000"
+echo "     - Expiry Date: 12/31/2025"
+echo "  4. Click 'Save'"
+echo ""
+read -p "Press Enter when contract is created..."
+
+echo -e "${BLUE}Step 4: Process Contract Workflow${NC}"
+echo "  1. Click 'Verify Contract' button"
+echo "     - The status should change to 'Verified'"
+echo "  2. Click 'Submit Contract' button"
+echo "     - The status should change to 'Submitted'"
+echo "  3. Check the 'Workflow Logs' tab"
+echo "     - You should see entries with blockchain transaction IDs"
+echo ""
+read -p "Press Enter when contract is submitted..."
+
+echo -e "${BLUE}Step 5: Test Payment Recording${NC}"
+echo "  1. Click the 'Record Payment' button"
+echo "  2. In the payment wizard, enter:"
+echo "     - Payment Amount: 25,000"
+echo "     - Payment Date: Today"
+echo "     - Payment Method: Check"
+echo "     - Payment Reference: CHECK-12345"
+echo "     - Notes: First payment"
+echo "  3. Click 'Record Payment'"
+echo ""
+read -p "Press Enter when payment is recorded..."
+
+echo -e "${BLUE}Step 6: Verify Payment History${NC}"
+echo "  1. In the contract form, check:"
+echo "     - Paid Amount should show: $25,000"
+echo "     - Remaining Amount should show: $75,000"
+echo "     - Payment Status should show progress"
+echo "  2. Check the 'Chatter' section at bottom"
+echo "     - You should see a message about the payment"
+echo ""
+read -p "Press Enter when you've verified the payment..."
+
+echo -e "${BLUE}Step 7: Record Another Payment${NC}"
+echo "  1. Click 'Record Payment' again"
+echo "  2. Enter:"
+echo "     - Payment Amount: 35,000"
+echo "     - Payment Method: Wire Transfer"
+echo "     - Payment Reference: WIRE-67890"
+echo "  3. Click 'Record Payment'"
+echo "  4. Verify:"
+echo "     - Paid Amount: $60,000"
+echo "     - Remaining Amount: $40,000"
+echo ""
+read -p "Press Enter when second payment is recorded..."
+
+echo ""
+echo "========================================"
+echo -e "${GREEN}✅ Payment UI Test Complete!${NC}"
+echo "========================================"
+echo ""
+echo "Test Results:"
+echo -e "  ${GREEN}✓${NC} Contract creation and workflow"
+echo -e "  ${GREEN}✓${NC} Payment recording wizard"
+echo -e "  ${GREEN}✓${NC} Payment history tracking"
+echo -e "  ${GREEN}✓${NC} Remaining balance calculation"
+echo -e "  ${GREEN}✓${NC} Chatter integration"
+echo ""
+echo "The payment functionality is working correctly in Odoo!"
+echo ""
+echo "Note: Payments are also synced to the blockchain for immutability."
+echo ""

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        
+        <!-- Sequence for Contract IDs -->
+        <record id="seq_vendor_contract" model="ir.sequence">
+            <field name="name">Vendor Contract Sequence</field>
+            <field name="code">vendor.contract</field>
+            <field name="prefix">CONTRACT</field>
+            <field name="padding">7</field>
+            <field name="company_id" eval="False"/>
+            <field name="number_next">1000001</field>
+            <field name="number_increment">1</field>
+        </record>
+        
+        <!-- Sequence for Vendor IDs -->
+        <record id="seq_vendor_id" model="ir.sequence">
+            <field name="name">Vendor ID Sequence</field>
+            <field name="code">vendor.contract.vendor</field>
+            <field name="prefix">VENDOR-</field>
+            <field name="padding">5</field>
+            <field name="company_id" eval="False"/>
+            <field name="number_next">10001</field>
+            <field name="number_increment">1</field>
+        </record>
+        
+        <!-- Email Template for Contract Expiration -->
+        <record id="email_template_contract_expiring" model="mail.template">
+            <field name="name">Contract Expiring Notification</field>
+            <field name="model_id" ref="model_vendor_contract"/>
+            <field name="subject">Contract {{object.contract_id}} Expiring Soon</field>
+            <field name="email_from">{{(object.company_id.email or user.email or 'noreply@vendorchain.com')}}</field>
+            <field name="email_to">{{object.created_by.email}}</field>
+            <field name="body_html"><![CDATA[
+                <p>Dear {{object.created_by.name or 'User'}},</p>
+                
+                <p>This is a reminder that the following contract is expiring soon:</p>
+                
+                <ul>
+                    <li><strong>Contract ID:</strong> {{object.contract_id}}</li>
+                    <li><strong>Vendor:</strong> {{object.vendor_name}}</li>
+                    <li><strong>Description:</strong> {{object.description}}</li>
+                    <li><strong>Expiry Date:</strong> {{object.expiry_date}}</li>
+                    <li><strong>Total Value:</strong> {{object.currency_id.symbol}}{{object.total_value}}</li>
+                    <li><strong>Remaining Amount:</strong> {{object.currency_id.symbol}}{{object.remaining_amount}}</li>
+                </ul>
+                
+                <p>Please take necessary action to renew or close this contract.</p>
+                
+                <p>Best regards,<br/>
+                VendorChain System</p>
+            ]]></field>
+        </record>
+        
+    </data>
+</odoo>

@@ -1,0 +1,25 @@
+# Crypto Configuration for VendorChain Network
+# This file defines the network topology and generates crypto materials
+
+OrdererOrgs:
+  - Name: Orderer
+    Domain: vendorchain.com
+    EnableNodeOUs: true
+    Specs:
+      - Hostname: orderer
+        SANS:
+          - localhost
+          - 127.0.0.1
+          - orderer.vendorchain.com
+
+PeerOrgs:
+  - Name: Org1
+    Domain: org1.vendorchain.com
+    EnableNodeOUs: true
+    Template:
+      Count: 1
+      SANS:
+        - localhost
+        - 127.0.0.1
+    Users:
+      Count: 2

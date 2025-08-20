@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Payment History List View -->
+    <record id="view_vendor_contract_payment_history_list" model="ir.ui.view">
+        <field name="name">vendor.contract.payment.history.list</field>
+        <field name="model">vendor.contract.payment.history</field>
+        <field name="arch" type="xml">
+            <list string="Payment History" create="false" edit="false">
+                <field name="payment_date"/>
+                <field name="payment_reference"/>
+                <field name="payment_method"/>
+                <field name="payment_amount" widget="monetary" sum="Total Paid"/>
+                <field name="currency_id" invisible="1"/>
+                <field name="vendor_name" optional="show"/>
+                <field name="contract_display" optional="show"/>
+                <field name="recorded_by" optional="hide"/>
+                <field name="blockchain_tx_id" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Payment History Form View -->
+    <record id="view_vendor_contract_payment_history_form" model="ir.ui.view">
+        <field name="name">vendor.contract.payment.history.form</field>
+        <field name="model">vendor.contract.payment.history</field>
+        <field name="arch" type="xml">
+            <form string="Payment Details" create="false" edit="false" delete="false">
+                <sheet>
+                    <group>
+                        <group string="Contract Information">
+                            <field name="contract_id" readonly="1"/>
+                            <field name="contract_display"/>
+                            <field name="vendor_name"/>
+                            <field name="currency_id" invisible="1"/>
+                        </group>
+                        <group string="Payment Information">
+                            <field name="payment_date"/>
+                            <field name="payment_amount" widget="monetary"/>
+                            <field name="payment_method"/>
+                            <field name="payment_reference"/>
+                        </group>
+                    </group>
+                    <group string="Notes">
+                        <field name="notes" nolabel="1" readonly="1"/>
+                    </group>
+                    <group>
+                        <group string="Recording Information">
+                            <field name="recorded_by"/>
+                            <field name="recorded_at"/>
+                        </group>
+                        <group string="Blockchain">
+                            <field name="blockchain_tx_id" readonly="1"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Payment History Search View -->
+    <record id="view_vendor_contract_payment_history_search" model="ir.ui.view">
+        <field name="name">vendor.contract.payment.history.search</field>
+        <field name="model">vendor.contract.payment.history</field>
+        <field name="arch" type="xml">
+            <search string="Search Payments">
+                <field name="payment_reference"/>
+                <field name="contract_display"/>
+                <field name="vendor_name"/>
+                <filter string="Check" name="check" domain="[('payment_method', '=', 'check')]"/>
+                <filter string="Wire Transfer" name="wire" domain="[('payment_method', '=', 'wire')]"/>
+                <filter string="ACH" name="ach" domain="[('payment_method', '=', 'ach')]"/>
+                <separator/>
+                <filter string="This Month" name="this_month" 
+                        domain="[('payment_date', '&gt;=', context_today().strftime('%%Y-%%m-01'))]"/>
+                <filter string="Last Month" name="last_month" 
+                        domain="[('payment_date', '&gt;=', (context_today() - relativedelta(months=1)).strftime('%%Y-%%m-01')),
+                                ('payment_date', '&lt;', context_today().strftime('%%Y-%%m-01'))]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Contract" name="group_contract" domain="[]" context="{'group_by': 'contract_id'}"/>
+                    <filter string="Vendor" name="group_vendor" domain="[]" context="{'group_by': 'vendor_name'}"/>
+                    <filter string="Payment Method" name="group_method" domain="[]" context="{'group_by': 'payment_method'}"/>
+                    <filter string="Payment Date" name="group_date" domain="[]" context="{'group_by': 'payment_date'}"/>
+                    <filter string="Recorded By" name="group_user" domain="[]" context="{'group_by': 'recorded_by'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Payment History Action -->
+    <record id="action_vendor_contract_payment_history" model="ir.actions.act_window">
+        <field name="name">Payment History</field>
+        <field name="res_model">vendor.contract.payment.history</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_vendor_contract_payment_history_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No payments recorded yet
+            </p>
+            <p>
+                Payments are recorded through the contract form using the "Record Payment" button.
+            </p>
+        </field>
+    </record>
+
+    <!-- Add Payment History to Contract Form -->
+    <record id="view_vendor_contract_form_payment_history" model="ir.ui.view">
+        <field name="name">vendor.contract.form.payment.history</field>
+        <field name="model">vendor.contract</field>
+        <field name="inherit_id" ref="view_vendor_contract_form"/>
+        <field name="arch" type="xml">
+            <!-- Add Payment History tab after Workflow Logs -->
+            <xpath expr="//page[@name='workflow_logs']" position="after">
+                <page string="Payment History" name="payment_history">
+                    <field name="payment_history_ids" readonly="1">
+                        <list string="Payments" create="false" edit="false" delete="false">
+                            <field name="payment_date"/>
+                            <field name="payment_reference"/>
+                            <field name="payment_method"/>
+                            <field name="payment_amount" widget="monetary" sum="Total"/>
+                            <field name="currency_id" invisible="1"/>
+                            <field name="notes" optional="hide"/>
+                            <field name="recorded_by" optional="hide"/>
+                            <field name="blockchain_tx_id" optional="hide"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

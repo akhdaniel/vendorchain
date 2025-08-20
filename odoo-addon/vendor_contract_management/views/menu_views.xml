@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Main Menu -->
+    <record id="menu_vendor_contract_root" model="ir.ui.menu">
+        <field name="name">Vendor Contracts</field>
+        <field name="sequence">10</field>
+    </record>
+
+    <!-- Contracts Menu -->
+    <record id="menu_vendor_contract_main" model="ir.ui.menu">
+        <field name="name">Contracts</field>
+        <field name="parent_id" ref="menu_vendor_contract_root"/>
+        <field name="sequence">10</field>
+    </record>
+
+    <record id="menu_vendor_contract_list" model="ir.ui.menu">
+        <field name="name">All Contracts</field>
+        <field name="parent_id" ref="menu_vendor_contract_main"/>
+        <field name="action" ref="action_vendor_contract"/>
+        <field name="sequence">10</field>
+    </record>
+
+    <record id="menu_vendor_contract_to_verify" model="ir.ui.menu">
+        <field name="name">To Verify</field>
+        <field name="parent_id" ref="menu_vendor_contract_main"/>
+        <field name="action" ref="action_vendor_contract_to_verify"/>
+        <field name="sequence">20</field>
+    </record>
+
+    <record id="menu_vendor_contract_to_submit" model="ir.ui.menu">
+        <field name="name">To Submit</field>
+        <field name="parent_id" ref="menu_vendor_contract_main"/>
+        <field name="action" ref="action_vendor_contract_to_submit"/>
+        <field name="sequence">30</field>
+    </record>
+
+    <record id="menu_vendor_contract_expiring" model="ir.ui.menu">
+        <field name="name">Expiring Soon</field>
+        <field name="parent_id" ref="menu_vendor_contract_main"/>
+        <field name="action" ref="action_vendor_contract_expiring"/>
+        <field name="sequence">40</field>
+    </record>
+
+    <!-- Vendors Menu -->
+    <record id="menu_vendor_management" model="ir.ui.menu">
+        <field name="name">Vendors</field>
+        <field name="parent_id" ref="menu_vendor_contract_root"/>
+        <field name="sequence">20</field>
+    </record>
+
+    <record id="menu_vendor_list" model="ir.ui.menu">
+        <field name="name">All Vendors</field>
+        <field name="parent_id" ref="menu_vendor_management"/>
+        <field name="action" ref="action_vendor_contract_vendor"/>
+        <field name="sequence">10</field>
+    </record>
+
+    <record id="menu_vendor_active" model="ir.ui.menu">
+        <field name="name">Active Vendors</field>
+        <field name="parent_id" ref="menu_vendor_management"/>
+        <field name="action" ref="action_vendor_contract_vendor_active"/>
+        <field name="sequence">20</field>
+    </record>
+
+    <!-- Reports Menu -->
+    <record id="menu_vendor_contract_reports" model="ir.ui.menu">
+        <field name="name">Reports</field>
+        <field name="parent_id" ref="menu_vendor_contract_root"/>
+        <field name="sequence">30</field>
+    </record>
+
+    <record id="menu_vendor_contract_dashboard" model="ir.ui.menu">
+        <field name="name">Dashboard</field>
+        <field name="parent_id" ref="menu_vendor_contract_reports"/>
+        <field name="action" ref="action_vendor_contract_dashboard"/>
+        <field name="sequence">10</field>
+    </record>
+    
+    <record id="menu_vendor_contract_payment_history" model="ir.ui.menu">
+        <field name="name">Payment History</field>
+        <field name="parent_id" ref="menu_vendor_contract_reports"/>
+        <field name="action" ref="action_vendor_contract_payment_history"/>
+        <field name="sequence">20</field>
+    </record>
+
+    <!-- Configuration Menu -->
+    <record id="menu_vendor_contract_config" model="ir.ui.menu">
+        <field name="name">Configuration</field>
+        <field name="parent_id" ref="menu_vendor_contract_root"/>
+        <field name="sequence">90</field>
+        <field name="groups_id" eval="[(4, ref('vendor_contract_management.group_vendor_contract_manager'))]"/>
+    </record>
+
+    <record id="menu_vendor_contract_api_test" model="ir.ui.menu">
+        <field name="name">Test API Connection</field>
+        <field name="parent_id" ref="menu_vendor_contract_config"/>
+        <field name="action" ref="action_test_api_connection"/>
+        <field name="sequence">10</field>
+    </record>
+
+    <record id="menu_vendor_contract_workflow_logs" model="ir.ui.menu">
+        <field name="name">Workflow Logs</field>
+        <field name="parent_id" ref="menu_vendor_contract_config"/>
+        <field name="action" ref="action_vendor_contract_workflow_log"/>
+        <field name="sequence">20</field>
+    </record>
+</odoo>

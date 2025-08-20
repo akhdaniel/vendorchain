@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        
+        <!-- Module Category -->
+        <record id="module_category_vendor_contract" model="ir.module.category">
+            <field name="name">Vendor Contract Management</field>
+            <field name="description">Manage vendor contracts with blockchain integration</field>
+            <field name="sequence">10</field>
+        </record>
+        
+        <!-- User Group -->
+        <record id="group_vendor_contract_user" model="res.groups">
+            <field name="name">User</field>
+            <field name="category_id" ref="module_category_vendor_contract"/>
+            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+            <field name="comment">Can view contracts and vendors</field>
+        </record>
+        
+        <!-- Creator Group -->
+        <record id="group_vendor_contract_creator" model="res.groups">
+            <field name="name">Creator</field>
+            <field name="category_id" ref="module_category_vendor_contract"/>
+            <field name="implied_ids" eval="[(4, ref('group_vendor_contract_user'))]"/>
+            <field name="comment">Can create and edit contracts in CREATED state</field>
+        </record>
+        
+        <!-- Verifier Group -->
+        <record id="group_vendor_contract_verifier" model="res.groups">
+            <field name="name">Verifier</field>
+            <field name="category_id" ref="module_category_vendor_contract"/>
+            <field name="implied_ids" eval="[(4, ref('group_vendor_contract_creator'))]"/>
+            <field name="comment">Can verify contracts (CREATED → VERIFIED)</field>
+        </record>
+        
+        <!-- Submitter Group -->
+        <record id="group_vendor_contract_submitter" model="res.groups">
+            <field name="name">Submitter</field>
+            <field name="category_id" ref="module_category_vendor_contract"/>
+            <field name="implied_ids" eval="[(4, ref('group_vendor_contract_verifier'))]"/>
+            <field name="comment">Can submit contracts (VERIFIED → SUBMITTED)</field>
+        </record>
+        
+        <!-- Manager Group -->
+        <record id="group_vendor_contract_manager" model="res.groups">
+            <field name="name">Manager</field>
+            <field name="category_id" ref="module_category_vendor_contract"/>
+            <field name="implied_ids" eval="[(4, ref('group_vendor_contract_submitter'))]"/>
+            <field name="comment">Full access to all contract operations</field>
+        </record>
+        
+        <!-- Record Rules -->
+        
+        <!-- All users can read all contracts -->
+        <record id="vendor_contract_read_all" model="ir.rule">
+            <field name="name">All users can read contracts</field>
+            <field name="model_id" ref="model_vendor_contract"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_vendor_contract_user'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+        
+        <!-- Creators can create contracts -->
+        <record id="vendor_contract_creator_create" model="ir.rule">
+            <field name="name">Creators can create contracts</field>
+            <field name="model_id" ref="model_vendor_contract"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_vendor_contract_creator'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+        
+        <!-- Managers have full access -->
+        <record id="vendor_contract_manager_all" model="ir.rule">
+            <field name="name">Managers have full access</field>
+            <field name="model_id" ref="model_vendor_contract"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('group_vendor_contract_manager'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+        
+    </data>
+</odoo>

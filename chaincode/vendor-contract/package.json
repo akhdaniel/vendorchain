@@ -1,0 +1,26 @@
+{
+  "name": "vendor-contract-chaincode",
+  "version": "1.0.0",
+  "description": "Smart contract for vendor contract management",
+  "main": "index.js",
+  "engines": {
+    "node": ">=12",
+    "npm": ">=5"
+  },
+  "scripts": {
+    "test": "mocha tests/**/*.js",
+    "start": "fabric-chaincode-node start"
+  },
+  "engineStrict": true,
+  "author": "VendorChain",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "fabric-contract-api": "^2.5.0",
+    "fabric-shim": "^2.5.0"
+  },
+  "devDependencies": {
+    "chai": "^4.3.6",
+    "mocha": "^10.0.0",
+    "sinon": "^14.0.0"
+  }
+}

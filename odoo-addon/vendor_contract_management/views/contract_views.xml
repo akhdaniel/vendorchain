@@ -1,0 +1,323 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Contract Tree View -->
+    <record id="view_vendor_contract_tree" model="ir.ui.view">
+        <field name="name">vendor.contract.tree</field>
+        <field name="model">vendor.contract</field>
+        <field name="arch" type="xml">
+            <list string="Contracts">
+                <field name="contract_id"/>
+                <field name="vendor_name"/>
+                <field name="contract_type"/>
+                <field name="state" widget="badge"/>
+                <field name="total_value" widget="monetary"/>
+                <field name="paid_amount" widget="monetary"/>
+                <field name="remaining_amount" widget="monetary"/>
+                <field name="expiry_date"/>
+                <field name="days_to_expire"/>
+                <field name="blockchain_synced" widget="boolean_toggle" readonly="1"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Contract Form View -->
+    <record id="view_vendor_contract_form" model="ir.ui.view">
+        <field name="name">vendor.contract.form</field>
+        <field name="model">vendor.contract</field>
+        <field name="arch" type="xml">
+            <form string="Contract">
+                <header>
+                    <button name="action_verify" type="object" string="Verify" class="btn-primary" 
+                            invisible="state != 'created'"
+                            groups="vendor_contract_management.group_vendor_contract_verifier"/>
+                    <button name="action_submit" type="object" string="Submit" class="btn-success" 
+                            invisible="state != 'verified'"
+                            groups="vendor_contract_management.group_vendor_contract_submitter"/>
+                    <button name="action_terminate" type="object" string="Terminate" class="btn-danger" 
+                            invisible="state in ['expired', 'terminated']"
+                            confirm="Are you sure you want to terminate this contract?"
+                            groups="vendor_contract_management.group_vendor_contract_manager"/>
+                    <button name="action_record_payment" type="object" string="Record Payment" class="btn-info" 
+                            invisible="state not in ['verified', 'submitted']"
+                            icon="fa-money"/>
+                    <button name="action_sync_blockchain" type="object" string="Sync to Blockchain" 
+                            icon="fa-chain"/>
+                    <field name="state" widget="statusbar" statusbar_visible="created,verified,submitted"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_payments" type="object" class="oe_stat_button" icon="fa-money">
+                            <field name="payment_count" widget="statinfo" string="Payments"/>
+                        </button>
+                        <button name="%(action_vendor_contract_workflow_log)d" type="action" 
+                                class="oe_stat_button" icon="fa-history"
+                                context="{'search_default_contract_id': id}">
+                            <span class="o_stat_text">Workflow History</span>
+                        </button>
+                    </div>
+                    <widget name="web_ribbon" title="Expired" bg_color="bg-danger" 
+                            invisible="state != 'expired'"/>
+                    <widget name="web_ribbon" title="Terminated" bg_color="bg-danger" 
+                            invisible="state != 'terminated'"/>
+                    <widget name="web_ribbon" title="Expiring Soon" bg_color="bg-warning" 
+                            invisible="days_to_expire &gt; 30 or days_to_expire &lt; 0"/>
+                    <div class="oe_title">
+                        <label for="contract_id"/>
+                        <h1>
+                            <field name="contract_id" readonly="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group name="contract_info" string="Contract Information">
+                            <field name="vendor_id" options="{'no_create': True}" 
+                                   readonly="state != 'draft'"/>
+                            <field name="contract_type" readonly="state != 'draft'"/>
+                            <field name="expiry_date" readonly="state not in ['draft', 'created']"/>
+                            <field name="days_to_expire" invisible="state in ['expired', 'terminated']"/>
+                        </group>
+                        <group name="financial_info" string="Financial Information">
+                            <field name="currency_id" invisible="1"/>
+                            <field name="total_value" widget="monetary" readonly="state not in ['draft', 'created']"/>
+                            <field name="paid_amount" widget="monetary" readonly="1"/>
+                            <field name="remaining_amount" widget="monetary" readonly="1"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="description" readonly="state not in ['draft', 'created']" placeholder="Enter contract description..."/>
+                    </group>
+                    <group>
+                        <group name="workflow_info" string="Workflow Information">
+                            <field name="created_by" readonly="1"/>
+                            <field name="verified_by" readonly="1" invisible="not verified_by"/>
+                            <field name="verified_at" readonly="1" invisible="not verified_at"/>
+                            <field name="submitted_by" readonly="1" invisible="not submitted_by"/>
+                            <field name="submitted_at" readonly="1" invisible="not submitted_at"/>
+                        </group>
+                        <group name="blockchain_info" string="Blockchain Information">
+                            <field name="blockchain_synced" readonly="1"/>
+                            <field name="blockchain_tx_id" readonly="1" invisible="not blockchain_tx_id"/>
+                            <field name="document_hash" readonly="1" invisible="not document_hash"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Payment History" name="payments">
+                            <group string="Payment Summary">
+                                <group>
+                                    <field name="payment_count"/>
+                                    <field name="paid_amount" widget="monetary"/>
+                                </group>
+                                <group>
+                                    <field name="remaining_amount" widget="monetary"/>
+                                    <field name="total_value" widget="monetary" readonly="1"/>
+                                </group>
+                            </group>
+                            <separator string="Payment Records"/>
+                            <field name="payment_history" widget="text" readonly="1" placeholder="No payments recorded yet"/>
+                        </page>
+                        <page string="Attachments" name="attachments">
+                            <field name="attachment_ids" widget="many2many_binary"/>
+                        </page>
+                        <page string="Workflow Logs" name="workflow_logs">
+                            <field name="workflow_log_ids" readonly="1">
+                                <list>
+                                    <field name="performed_at"/>
+                                    <field name="action"/>
+                                    <field name="from_state"/>
+                                    <field name="to_state" widget="badge"/>
+                                    <field name="performed_by"/>
+                                    <field name="blockchain_tx_id"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Notes" name="notes">
+                            <field name="notes" placeholder="Add internal notes..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- Contract Search View -->
+    <record id="view_vendor_contract_search" model="ir.ui.view">
+        <field name="name">vendor.contract.search</field>
+        <field name="model">vendor.contract</field>
+        <field name="arch" type="xml">
+            <search string="Search Contracts">
+                <field name="contract_id"/>
+                <field name="vendor_name"/>
+                <field name="description"/>
+                <separator/>
+                <filter string="Created" name="created" domain="[('state', '=', 'created')]"/>
+                <filter string="Verified" name="verified" domain="[('state', '=', 'verified')]"/>
+                <filter string="Submitted" name="submitted" domain="[('state', '=', 'submitted')]"/>
+                <filter string="Expired" name="expired" domain="[('state', '=', 'expired')]"/>
+                <separator/>
+                <filter string="Expiring Soon" name="expiring_soon" domain="[('days_to_expire', '&lt;', 30), ('days_to_expire', '&gt;', 0)]"/>
+                <filter string="Has Payments" name="has_payments" domain="[('paid_amount', '&gt;', 0)]"/>
+                <filter string="Fully Paid" name="fully_paid" domain="[('remaining_amount', '=', 0)]"/>
+                <separator/>
+                <filter string="Synced to Blockchain" name="blockchain_synced" domain="[('blockchain_synced', '=', True)]"/>
+                <filter string="Not Synced" name="not_synced" domain="[('blockchain_synced', '=', False)]"/>
+                <separator/>
+                <filter string="My Contracts" name="my_contracts" domain="[('created_by', '=', uid)]"/>
+                <separator/>
+                <group expand="0" string="Group By">
+                    <filter string="Vendor" name="group_vendor" context="{'group_by': 'vendor_id'}"/>
+                    <filter string="State" name="group_state" context="{'group_by': 'state'}"/>
+                    <filter string="Type" name="group_type" context="{'group_by': 'contract_type'}"/>
+                    <filter string="Expiry Month" name="group_expiry" context="{'group_by': 'expiry_date:month'}"/>
+                    <filter string="Company" name="group_company" context="{'group_by': 'company_id'}" groups="base.group_multi_company"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Contract Kanban View -->
+    <record id="view_vendor_contract_kanban" model="ir.ui.view">
+        <field name="name">vendor.contract.kanban</field>
+        <field name="model">vendor.contract</field>
+        <field name="arch" type="xml">
+            <kanban default_group_by="state" class="o_kanban_small_column" quick_create="false">
+                <field name="contract_id"/>
+                <field name="vendor_name"/>
+                <field name="contract_type"/>
+                <field name="state"/>
+                <field name="total_value"/>
+                <field name="paid_amount"/>
+                <field name="remaining_amount"/>
+                <field name="expiry_date"/>
+                <field name="days_to_expire"/>
+                <field name="blockchain_synced"/>
+                <progressbar field="state" colors='{"created": "warning", "verified": "info", "submitted": "success", "expired": "danger"}'/>
+                <templates>
+                    <t t-name="card">
+                        <div class="oe_kanban_global_click">
+                            <div class="o_dropdown_kanban dropdown">
+                                <a class="dropdown-toggle o-no-caret btn" role="button" data-toggle="dropdown" data-display="static" href="#" aria-label="Dropdown menu" title="Dropdown menu">
+                                    <span class="fa fa-ellipsis-v"/>
+                                </a>
+                                <div class="dropdown-menu" role="menu">
+                                    <t t-if="widget.editable"><a role="menuitem" type="edit" class="dropdown-item">Edit</a></t>
+                                    <t t-if="widget.deletable"><a role="menuitem" type="delete" class="dropdown-item">Delete</a></t>
+                                </div>
+                            </div>
+                            <div class="oe_kanban_content">
+                                <div class="o_kanban_record_top">
+                                    <div class="o_kanban_record_headings">
+                                        <strong class="o_kanban_record_title">
+                                            <field name="contract_id"/>
+                                        </strong>
+                                        <small class="o_kanban_record_subtitle text-muted">
+                                            <field name="vendor_name"/>
+                                        </small>
+                                    </div>
+                                    <field name="state" widget="label_selection" options="{'classes': {'created': 'warning', 'verified': 'info', 'submitted': 'success', 'expired': 'danger'}}"/>
+                                </div>
+                                <div class="o_kanban_record_body">
+                                    <div>
+                                        <field name="contract_type" widget="badge"/>
+                                    </div>
+                                    <div>
+                                        <strong>Value: </strong><field name="total_value" widget="monetary"/>
+                                    </div>
+                                    <div>
+                                        <strong>Paid: </strong><field name="paid_amount" widget="monetary"/>
+                                    </div>
+                                    <div t-if="record.days_to_expire.raw_value &lt; 30 and record.days_to_expire.raw_value &gt; 0" class="text-warning">
+                                        <i class="fa fa-warning"/> Expires in <field name="days_to_expire"/> days
+                                    </div>
+                                    <div t-if="record.days_to_expire.raw_value &lt; 0" class="text-danger">
+                                        <i class="fa fa-times-circle"/> Expired
+                                    </div>
+                                </div>
+                                <div class="o_kanban_record_bottom">
+                                    <div class="oe_kanban_bottom_left">
+                                        <field name="activity_ids" widget="kanban_activity"/>
+                                    </div>
+                                    <div class="oe_kanban_bottom_right">
+                                        <field name="blockchain_synced" widget="boolean"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
+    <!-- Contract Action - All Contracts -->
+    <record id="action_vendor_contract" model="ir.actions.act_window">
+        <field name="name">All Contracts</field>
+        <field name="res_model">vendor.contract</field>
+        <field name="view_mode">list,kanban,form,graph,pivot</field>
+        <field name="search_view_id" ref="view_vendor_contract_search"/>
+        <field name="context">{}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create your first contract
+            </p>
+            <p>
+                Manage vendor contracts with blockchain integration.
+                Track contract lifecycle from creation to submission.
+            </p>
+        </field>
+    </record>
+
+    <!-- Contract Action - To Verify -->
+    <record id="action_vendor_contract_to_verify" model="ir.actions.act_window">
+        <field name="name">Contracts to Verify</field>
+        <field name="res_model">vendor.contract</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="search_view_id" ref="view_vendor_contract_search"/>
+        <field name="domain">[('state', '=', 'created')]</field>
+        <field name="context">{'search_default_created': 1, 'default_state': 'created'}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No contracts pending verification
+            </p>
+            <p>
+                Contracts in 'Created' state are waiting for verification.
+            </p>
+        </field>
+    </record>
+
+    <!-- Contract Action - To Submit -->
+    <record id="action_vendor_contract_to_submit" model="ir.actions.act_window">
+        <field name="name">Contracts to Submit</field>
+        <field name="res_model">vendor.contract</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="search_view_id" ref="view_vendor_contract_search"/>
+        <field name="domain">[('state', '=', 'verified')]</field>
+        <field name="context">{'search_default_verified': 1, 'default_state': 'verified'}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No contracts pending submission
+            </p>
+            <p>
+                Contracts in 'Verified' state are ready for final submission.
+            </p>
+        </field>
+    </record>
+
+    <!-- Contract Action - Expiring Soon -->
+    <record id="action_vendor_contract_expiring" model="ir.actions.act_window">
+        <field name="name">Expiring Soon</field>
+        <field name="res_model">vendor.contract</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="search_view_id" ref="view_vendor_contract_search"/>
+        <field name="domain">[('days_to_expire', '&gt;', 0), ('days_to_expire', '&lt;=', 30), ('state', 'not in', ['expired', 'terminated'])]</field>
+        <field name="context">{'search_default_expiring_soon': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No contracts expiring soon
+            </p>
+            <p>
+                Contracts expiring within the next 30 days will appear here.
+            </p>
+        </field>
+    </record>
+</odoo>

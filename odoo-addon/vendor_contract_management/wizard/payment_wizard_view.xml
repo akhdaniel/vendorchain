@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Payment Wizard Form View -->
+    <record id="view_vendor_contract_payment_wizard" model="ir.ui.view">
+        <field name="name">vendor.contract.payment.wizard.form</field>
+        <field name="model">vendor.contract.payment.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Record Payment">
+                <group>
+                    <group string="Contract Information">
+                        <field name="contract_id" invisible="1"/>
+                        <field name="currency_id" invisible="1"/>
+                        <field name="contract_display"/>
+                        <field name="vendor_name"/>
+                        <field name="total_value" widget="monetary"/>
+                        <field name="paid_amount" widget="monetary"/>
+                    </group>
+                    <group string="Payment Details">
+                        <field name="payment_amount" widget="monetary"/>
+                        <field name="remaining_amount" widget="monetary"/>
+                        <field name="payment_date"/>
+                        <field name="payment_method"/>
+                        <field name="payment_reference"/>
+                    </group>
+                </group>
+                <group>
+                    <field name="notes" placeholder="Additional notes about this payment..."/>
+                </group>
+                <footer>
+                    <button name="action_record_payment" 
+                            type="object" 
+                            string="Record Payment" 
+                            class="btn-primary"/>
+                    <button string="Cancel" 
+                            class="btn-secondary" 
+                            special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Payment Wizard Action -->
+    <record id="action_vendor_contract_payment_wizard" model="ir.actions.act_window">
+        <field name="name">Record Payment</field>
+        <field name="res_model">vendor.contract.payment.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

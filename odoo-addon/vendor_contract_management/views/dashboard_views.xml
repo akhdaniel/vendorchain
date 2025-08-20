@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Dashboard Action - Shows contracts in graph/pivot view -->
+    <record id="action_vendor_contract_dashboard" model="ir.actions.act_window">
+        <field name="name">Contract Dashboard</field>
+        <field name="res_model">vendor.contract</field>
+        <field name="view_mode">graph,pivot,list</field>
+        <field name="context">{}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No contracts to display
+            </p>
+            <p>
+                Create contracts to see dashboard analytics
+            </p>
+        </field>
+    </record>
+
+    <!-- Graph View for Dashboard -->
+    <record id="view_vendor_contract_graph" model="ir.ui.view">
+        <field name="name">vendor.contract.graph</field>
+        <field name="model">vendor.contract</field>
+        <field name="arch" type="xml">
+            <graph string="Contract Analysis" type="bar">
+                <field name="state" type="row"/>
+                <field name="total_value" type="measure"/>
+            </graph>
+        </field>
+    </record>
+
+    <!-- Pivot View for Dashboard -->
+    <record id="view_vendor_contract_pivot" model="ir.ui.view">
+        <field name="name">vendor.contract.pivot</field>
+        <field name="model">vendor.contract</field>
+        <field name="arch" type="xml">
+            <pivot string="Contract Analysis">
+                <field name="vendor_id" type="row"/>
+                <field name="state" type="col"/>
+                <field name="total_value" type="measure"/>
+                <field name="paid_amount" type="measure"/>
+                <field name="remaining_amount" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+</odoo>
