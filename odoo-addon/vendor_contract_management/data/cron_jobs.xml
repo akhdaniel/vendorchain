@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Existing cron job for expired contracts -->
+        <record id="cron_check_expired_contracts" model="ir.cron">
+            <field name="name">Check Expired Contracts</field>
+            <field name="model_id" ref="model_vendor_contract"/>
+            <field name="state">code</field>
+            <field name="code">model.cron_check_expired_contracts()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="numbercall">-1</field>
+            <field name="active" eval="True"/>
+            <field name="doall" eval="False"/>
+        </record>
+        
+        <!-- New cron job for blockchain verification -->
+        <record id="cron_verify_blockchain_integrity" model="ir.cron">
+            <field name="name">Verify Blockchain Integrity</field>
+            <field name="model_id" ref="model_vendor_contract"/>
+            <field name="state">code</field>
+            <field name="code">model.cron_verify_blockchain_integrity()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+            <field name="numbercall">-1</field>
+            <field name="active" eval="True"/>
+            <field name="doall" eval="False"/>
+            <field name="priority">5</field>
+        </record>
+        
+        <!-- Cron job for detecting tampered data -->
+        <record id="cron_detect_tampered_data" model="ir.cron">
+            <field name="name">Detect Tampered Contract Data</field>
+            <field name="model_id" ref="model_vendor_contract"/>
+            <field name="state">code</field>
+            <field name="code">model.cron_detect_tampered_data()</field>
+            <field name="interval_number">30</field>
+            <field name="interval_type">minutes</field>
+            <field name="numbercall">-1</field>
+            <field name="active" eval="True"/>
+            <field name="doall" eval="False"/>
+            <field name="priority">1</field>
+        </record>
+    </data>
+</odoo>

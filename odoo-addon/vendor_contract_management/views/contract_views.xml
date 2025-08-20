@@ -16,6 +16,7 @@
                 <field name="expiry_date"/>
                 <field name="days_to_expire"/>
                 <field name="blockchain_synced" widget="boolean_toggle" readonly="1"/>
+                <field name="verification_status" widget="badge" decoration-success="verification_status == 'verified'" decoration-warning="verification_status == 'mismatch'" decoration-danger="verification_status == 'not_on_chain'"/>
             </list>
         </field>
     </record>
@@ -42,6 +43,9 @@
                             icon="fa-money"/>
                     <button name="action_sync_blockchain" type="object" string="Sync to Blockchain" 
                             icon="fa-chain"/>
+                    <button name="action_verify_blockchain" type="object" string="Verify Blockchain" 
+                            icon="fa-shield" class="btn-warning"
+                            invisible="not blockchain_tx_id"/>
                     <field name="state" widget="statusbar" statusbar_visible="created,verified,submitted"/>
                 </header>
                 <sheet>
@@ -97,6 +101,10 @@
                         <group name="blockchain_info" string="Blockchain Information">
                             <field name="blockchain_synced" readonly="1"/>
                             <field name="blockchain_tx_id" readonly="1" invisible="not blockchain_tx_id"/>
+                            <field name="blockchain_verified" readonly="1" widget="boolean_toggle"/>
+                            <field name="verification_status" widget="badge" readonly="1"/>
+                            <field name="last_verification_date" readonly="1" invisible="not last_verification_date"/>
+                            <field name="blockchain_hash" readonly="1" invisible="not blockchain_hash"/>
                             <field name="document_hash" readonly="1" invisible="not document_hash"/>
                         </group>
                     </group>

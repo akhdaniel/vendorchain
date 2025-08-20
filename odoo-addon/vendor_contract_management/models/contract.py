@@ -179,6 +179,31 @@ class VendorContract(models.Model):
         store=True
     )
     
+    # Blockchain Verification Fields
+    blockchain_verified = fields.Boolean(
+        string='Blockchain Verified',
+        compute='_compute_blockchain_verification',
+        store=False,
+        help='Indicates if the contract data matches blockchain'
+    )
+    blockchain_hash = fields.Char(
+        string='Data Hash',
+        compute='_compute_data_hash',
+        store=True,
+        help='Hash of current data for comparison with blockchain'
+    )
+    last_verification_date = fields.Datetime(
+        string='Last Verified',
+        readonly=True,
+        help='Last time this contract was verified against blockchain'
+    )
+    verification_status = fields.Selection([
+        ('verified', 'Verified'),
+        ('mismatch', 'Data Mismatch'),
+        ('not_on_chain', 'Not on Blockchain'),
+        ('pending', 'Verification Pending')
+    ], string='Verification Status', compute='_compute_blockchain_verification', store=False)
+    
     # Additional Fields
     company_id = fields.Many2one(
         'res.company',
@@ -465,6 +490,118 @@ class VendorContract(models.Model):
         for contract in expired_contracts:
             contract.action_expire()
             _logger.info(f"Contract {contract.contract_id} marked as expired")
+    
+    @api.model
+    def cron_verify_blockchain_integrity(self):
+        """Cron job to verify all active contracts against blockchain"""
+        # Get all contracts that should be on blockchain
+        contracts = self.search([
+            ('state', 'in', ['created', 'verified', 'submitted']),
+            ('blockchain_tx_id', '!=', False)
+        ])
+        
+        tampered_contracts = []
+        
+        for contract in contracts:
+            result = contract._verify_blockchain_data()
+            contract.last_verification_date = fields.Datetime.now()
+            
+            if result['status'] == 'mismatch':
+                tampered_contracts.append(contract)
+                _logger.warning(f"INTEGRITY CHECK FAILED: Contract {contract.contract_id} data mismatch")
+                
+                # Create alert activity
+                contract.activity_schedule(
+                    'mail.mail_activity_data_warning',
+                    summary=f"Blockchain Integrity Check Failed",
+                    note=f"Contract {contract.contract_id} failed integrity check. Data in Odoo does not match blockchain.",
+                    user_id=contract.created_by.id
+                )
+        
+        if tampered_contracts:
+            # Send email alert to administrators
+            self._send_tamper_alert_email(tampered_contracts)
+        
+        _logger.info(f"Blockchain integrity check completed. Checked {len(contracts)} contracts, found {len(tampered_contracts)} mismatches.")
+    
+    @api.model
+    def cron_detect_tampered_data(self):
+        """Cron job to detect any unauthorized data modifications"""
+        # Check contracts modified in the last 30 minutes
+        thirty_minutes_ago = fields.Datetime.now() - timedelta(minutes=30)
+        
+        recently_modified = self.search([
+            ('write_date', '>=', thirty_minutes_ago),
+            ('blockchain_tx_id', '!=', False)
+        ])
+        
+        for contract in recently_modified:
+            # Recompute the hash
+            old_hash = contract.blockchain_hash
+            contract._compute_data_hash()
+            new_hash = contract.blockchain_hash
+            
+            # If hash changed, verify against blockchain
+            if old_hash != new_hash:
+                result = contract._verify_blockchain_data()
+                
+                if result['status'] == 'mismatch':
+                    _logger.critical(
+                        f"SECURITY ALERT: Contract {contract.contract_id} has been modified outside of normal workflow! "
+                        f"Modified by: {contract.write_uid.name if contract.write_uid else 'Unknown'} "
+                        f"at {contract.write_date}"
+                    )
+                    
+                    # Create urgent activity
+                    self.env['mail.activity'].create({
+                        'res_model': 'vendor.contract',
+                        'res_id': contract.id,
+                        'activity_type_id': self.env.ref('mail.mail_activity_data_warning').id,
+                        'summary': '🚨 SECURITY: Unauthorized Data Modification Detected',
+                        'note': f"""<p><b>SECURITY ALERT</b></p>
+                        <p>Contract {contract.contract_id} has been modified outside of the normal workflow.</p>
+                        <p>Modified by: {contract.write_uid.name if contract.write_uid else 'Unknown'}</p>
+                        <p>Modified at: {contract.write_date}</p>
+                        <p>The data no longer matches the blockchain record. This may indicate tampering.</p>
+                        <p><b>Immediate investigation required!</b></p>""",
+                        'date_deadline': fields.Date.today(),
+                        'user_id': self.env.ref('base.user_admin').id,
+                    })
+    
+    def _send_tamper_alert_email(self, contracts):
+        """Send email alert for tampered contracts"""
+        try:
+            admin_users = self.env['res.users'].search([('groups_id', 'in', self.env.ref('base.group_system').id)])
+            
+            if admin_users:
+                subject = f"⚠️ Blockchain Integrity Alert: {len(contracts)} Contracts Failed Verification"
+                
+                body = """<p><b>Blockchain Integrity Check Alert</b></p>
+                <p>The following contracts have failed blockchain verification:</p>
+                <ul>"""
+                
+                for contract in contracts:
+                    body += f"""<li>
+                        Contract ID: {contract.contract_id}<br/>
+                        Vendor: {contract.vendor_name}<br/>
+                        Total Value: {contract.total_value}<br/>
+                        Last Verified: {contract.last_verification_date or 'Never'}
+                    </li>"""
+                
+                body += """</ul>
+                <p><b>Action Required:</b> Please investigate these contracts immediately as the data in Odoo 
+                does not match the blockchain records. This may indicate unauthorized modifications.</p>"""
+                
+                for user in admin_users:
+                    self.env['mail.mail'].create({
+                        'subject': subject,
+                        'body_html': body,
+                        'email_to': user.email,
+                        'auto_delete': False,
+                    }).send()
+                    
+        except Exception as e:
+            _logger.error(f"Failed to send tamper alert email: {str(e)}")
 
     @api.constrains('expiry_date')
     def _check_expiry_date(self):
@@ -480,3 +617,140 @@ class VendorContract(models.Model):
         for contract in self:
             if contract.total_value <= 0:
                 raise ValidationError(_("Total value must be greater than zero"))
+    
+    @api.depends('contract_id', 'vendor_id', 'contract_type', 'description', 'total_value', 'expiry_date', 'state')
+    def _compute_data_hash(self):
+        """Compute hash of contract data for integrity checking"""
+        import hashlib
+        import json
+        
+        for contract in self:
+            # Create deterministic data structure
+            data_to_hash = {
+                'contract_id': contract.contract_id or '',
+                'vendor_id': contract.vendor_id.vendor_id if contract.vendor_id else '',
+                'contract_type': contract.contract_type or '',
+                'description': contract.description or '',
+                'total_value': float(contract.total_value) if contract.total_value else 0.0,
+                'expiry_date': contract.expiry_date.isoformat() if contract.expiry_date else '',
+                'state': contract.state or ''
+            }
+            
+            # Sort keys for deterministic hashing
+            data_json = json.dumps(data_to_hash, sort_keys=True)
+            contract.blockchain_hash = hashlib.sha256(data_json.encode()).hexdigest()
+    
+    def _compute_blockchain_verification(self):
+        """Verify contract data against blockchain"""
+        for contract in self:
+            if not contract.blockchain_tx_id:
+                contract.blockchain_verified = False
+                contract.verification_status = 'not_on_chain'
+            else:
+                # Perform verification
+                verification_result = contract._verify_blockchain_data()
+                contract.blockchain_verified = verification_result.get('verified', False)
+                contract.verification_status = verification_result.get('status', 'pending')
+    
+    def _verify_blockchain_data(self):
+        """Verify this contract's data against blockchain"""
+        self.ensure_one()
+        
+        if not self.blockchain_tx_id:
+            return {'verified': False, 'status': 'not_on_chain'}
+        
+        try:
+            import requests
+            import json
+            
+            # Check CouchDB for blockchain data
+            couch_url = "http://admin:adminpw@localhost:5984"
+            
+            # Search for contract in blockchain databases
+            dbs_response = requests.get(f"{couch_url}/_all_dbs")
+            if dbs_response.status_code == 200:
+                databases = [db for db in dbs_response.json() if 'channel' in db or 'contract' in db]
+                
+                for db in databases:
+                    query = {
+                        "selector": {
+                            "$or": [
+                                {"contract_id": self.contract_id},
+                                {"blockchain_tx_id": self.blockchain_tx_id}
+                            ]
+                        }
+                    }
+                    
+                    find_response = requests.post(
+                        f"{couch_url}/{db}/_find",
+                        json=query,
+                        headers={"Content-Type": "application/json"}
+                    )
+                    
+                    if find_response.status_code == 200:
+                        docs = find_response.json().get('docs', [])
+                        if docs:
+                            blockchain_data = docs[0]
+                            
+                            # Compare critical fields
+                            if (
+                                blockchain_data.get('contract_id') == self.contract_id and
+                                blockchain_data.get('vendor_id') == (self.vendor_id.vendor_id if self.vendor_id else None) and
+                                float(blockchain_data.get('total_value', 0)) == float(self.total_value or 0)
+                            ):
+                                return {'verified': True, 'status': 'verified'}
+                            else:
+                                _logger.warning(f"Data mismatch for contract {self.contract_id}")
+                                return {'verified': False, 'status': 'mismatch'}
+            
+            # Check via API as fallback
+            api_response = requests.get(f"http://localhost:8000/api/v1/contracts/{self.contract_id}")
+            if api_response.status_code == 200:
+                api_data = api_response.json().get('data', {})
+                if api_data.get('blockchain_tx_id') == self.blockchain_tx_id:
+                    return {'verified': True, 'status': 'verified'}
+            
+            return {'verified': False, 'status': 'pending'}
+            
+        except Exception as e:
+            _logger.error(f"Blockchain verification error for {self.contract_id}: {str(e)}")
+            return {'verified': False, 'status': 'pending'}
+    
+    def action_verify_blockchain(self):
+        """Manual blockchain verification action"""
+        self.ensure_one()
+        
+        result = self._verify_blockchain_data()
+        self.last_verification_date = fields.Datetime.now()
+        
+        if result['status'] == 'verified':
+            message = _("✅ Contract data verified against blockchain")
+            message_type = 'success'
+        elif result['status'] == 'mismatch':
+            message = _("⚠️ WARNING: Contract data does not match blockchain! Data may have been tampered.")
+            message_type = 'warning'
+            # Log security event
+            _logger.warning(f"SECURITY: Data mismatch detected for contract {self.contract_id}")
+            # Create activity for follow-up
+            self.activity_schedule(
+                'mail.mail_activity_data_warning',
+                summary=f"Blockchain data mismatch for {self.contract_id}",
+                note="Contract data in Odoo does not match blockchain. Please investigate."
+            )
+        elif result['status'] == 'not_on_chain':
+            message = _("❌ Contract not found on blockchain")
+            message_type = 'warning'
+        else:
+            message = _("⏳ Blockchain verification pending")
+            message_type = 'info'
+        
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Blockchain Verification'),
+                'message': message,
+                'type': message_type,
+                'sticky': result['status'] == 'mismatch',
+            }
+        }

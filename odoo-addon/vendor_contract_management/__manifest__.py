@@ -39,6 +39,7 @@ Key Features:
         
         # Data
         'data/contract_data.xml',
+        'data/cron_jobs.xml',
         
         # Wizard views
         'wizard/payment_wizard_view.xml',
