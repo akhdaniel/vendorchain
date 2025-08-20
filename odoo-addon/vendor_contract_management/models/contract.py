@@ -664,12 +664,20 @@ class VendorContract(models.Model):
             import json
             
             # Check CouchDB for blockchain data
-            couch_url = "http://admin:adminpw@localhost:5984"
+            # Use container name when running in Docker, localhost for external access
+            import os
+            if os.path.exists('/.dockerenv'):
+                # Running inside Docker container
+                couch_url = "http://admin:adminpw@couchdb:5984"
+            else:
+                # Running outside Docker
+                couch_url = "http://admin:adminpw@localhost:5984"
             
             # Search for contract in blockchain databases
             dbs_response = requests.get(f"{couch_url}/_all_dbs")
             if dbs_response.status_code == 200:
-                databases = [db for db in dbs_response.json() if 'channel' in db or 'contract' in db]
+                # Look for vendorchannel databases or any with 'channel' or 'contract' in the name
+                databases = [db for db in dbs_response.json() if 'vendorchannel' in db or 'channel' in db or 'contract' in db]
                 
                 for db in databases:
                     query = {
@@ -693,11 +701,16 @@ class VendorContract(models.Model):
                             blockchain_data = docs[0]
                             
                             # Compare critical fields
-                            if (
-                                blockchain_data.get('contract_id') == self.contract_id and
-                                blockchain_data.get('vendor_id') == (self.vendor_id.vendor_id if self.vendor_id else None) and
-                                float(blockchain_data.get('total_value', 0)) == float(self.total_value or 0)
-                            ):
+                            contract_match = blockchain_data.get('contract_id') == self.contract_id
+                            vendor_match = blockchain_data.get('vendor_id') == (self.vendor_id.vendor_id if self.vendor_id else None)
+                            value_match = float(blockchain_data.get('total_value', 0)) == float(self.total_value or 0)
+                            
+                            _logger.info(f"Verification for {self.contract_id}:")
+                            _logger.info(f"  Contract ID: {blockchain_data.get('contract_id')} == {self.contract_id} ? {contract_match}")
+                            _logger.info(f"  Vendor ID: {blockchain_data.get('vendor_id')} == {self.vendor_id.vendor_id if self.vendor_id else None} ? {vendor_match}")
+                            _logger.info(f"  Total Value: {blockchain_data.get('total_value')} == {self.total_value} ? {value_match}")
+                            
+                            if contract_match and vendor_match and value_match:
                                 return {'verified': True, 'status': 'verified'}
                             else:
                                 _logger.warning(f"Data mismatch for contract {self.contract_id}")
